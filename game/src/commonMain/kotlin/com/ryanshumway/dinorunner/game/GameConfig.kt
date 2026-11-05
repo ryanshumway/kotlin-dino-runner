@@ -61,8 +61,11 @@ data class GameConfig(
     // Day and night
     /** The sky flips between day and night every this many points. */
     val dayNightEveryPoints: Float = 500f,
-    /** How many points the fade between day and night lasts (about 2 seconds). */
-    val dayNightFadePoints: Float = 25f,
+    /**
+     * How many points the fade between day and night lasts (about 4 seconds
+     * at that speed). Long enough for the sunset in the middle to register.
+     */
+    val dayNightFadePoints: Float = 60f,
 
     /**
      * After a crash, taps are ignored this long, so a jump pressed a moment

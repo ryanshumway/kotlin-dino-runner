@@ -5,10 +5,14 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.lerp
 import com.ryanshumway.dinorunner.game.GameConfig
 import com.ryanshumway.dinorunner.game.GameState
 import com.ryanshumway.dinorunner.game.Obstacle
+import com.ryanshumway.dinorunner.game.ObstacleKind
+import kotlin.math.floor
+import kotlin.math.max
+import kotlin.math.pow
+import kotlin.math.roundToInt
 
 // Drawing only: this file reads a GameState and paints it. Nothing here
 // changes state.
@@ -20,165 +24,170 @@ import com.ryanshumway.dinorunner.game.Obstacle
 /** How many world units fit vertically on screen. */
 const val VIEW_HEIGHT = 240f
 /** World y = 0 (the ground) sits this many units below the top of the view. */
-private const val GROUND_LINE = 190f
-/** Size of one "pixel" of the blocky dino. 12 cells × 4 = the 48-unit player box. */
+const val GROUND_LINE = 190f
+/** Size of one square of the dino. 12 cells × 4 = the 48-unit player box. */
 private const val CELL = 4f
 private const val PEBBLE_SPACING = 26f
 
-/** Every color in the scene, so day and night are just two instances. */
-class SceneColors(
-    val sky: Color,
-    val ink: Color,
-    val dino: Color,
-    val plates: Color,
-    val cactus: Color,
-    val moon: Color,
-)
-
-private val Day = SceneColors(
-    sky = Color(0xFFF4EFE6),
-    ink = Color(0xFF3A3530),
-    dino = Color(0xFF2F8F7A),
-    plates = Color(0xFFEE8434),
-    cactus = Color(0xFF557A3E),
-    moon = Color(0xFFF4EFE6),
-)
-
-private val Night = SceneColors(
-    sky = Color(0xFF1F2433),
-    ink = Color(0xFFE6E1D6),
-    dino = Color(0xFF5FC2A6),
-    plates = Color(0xFFF29A4A),
-    cactus = Color(0xFF86AE6A),
-    moon = Color(0xFFF7F1DC),
-)
-
-/**
- * Blends day into night. [night] runs from 0 (day) to 1 (night) and comes
- * from the engine, so the fade is the same on every device.
- */
-fun sceneColors(night: Float): SceneColors = when {
-    night <= 0f -> Day
-    night >= 1f -> Night
-    else -> SceneColors(
-        sky = lerp(Day.sky, Night.sky, night),
-        ink = lerp(Day.ink, Night.ink, night),
-        dino = lerp(Day.dino, Night.dino, night),
-        plates = lerp(Day.plates, Night.plates, night),
-        cactus = lerp(Day.cactus, Night.cactus, night),
-        moon = Night.moon,
-    )
-}
-
-fun DrawScope.drawGame(state: GameState, config: GameConfig, night: Float) {
+fun DrawScope.drawGame(state: GameState, config: GameConfig, night: Float, motion: Boolean = true) {
     val scale = size.height / VIEW_HEIGHT
     val viewWidth = size.width / scale
     val colors = sceneColors(night)
+    val distance = state.world.distance
 
-    drawRect(colors.sky)
     withTransform({ scale(scale, scale, pivot = Offset.Zero) }) {
-        if (night > 0f) drawNightSky(viewWidth, colors.moon, alpha = night)
-        drawGround(state.world.distance, viewWidth, colors.ink)
-        state.world.obstacles.forEach { drawCactus(it, colors.cactus) }
+        drawBackground(distance, night, viewWidth, colors, motion)
+        drawGround(distance, viewWidth, colors)
+        state.world.obstacles.forEach { drawObstacle(it, colors) }
         drawDino(state, config, colors)
     }
-}
-
-// Stars sit at fixed fractions of the screen width, so they spread out on
-// wider screens instead of bunching at the left.
-private val STARS = listOf(
-    0.08f to 34f, 0.19f to 72f, 0.31f to 22f, 0.44f to 58f,
-    0.57f to 30f, 0.66f to 88f, 0.86f to 64f, 0.94f to 26f,
-)
-private val MOON = Sprite(".XXX.", "XXX..", "XX...", "XXX..", ".XXX.")
-
-/** Stars and a blocky crescent moon, faded in with [alpha]. They don't scroll. */
-private fun DrawScope.drawNightSky(viewWidth: Float, color: Color, alpha: Float) {
-    val faded = color.copy(alpha = alpha)
-    // Kotlin note: `(fraction, y)` unpacks each pair, like a Swift tuple pattern.
-    for ((fraction, y) in STARS) {
-        drawRect(faded, topLeft = Offset(fraction * viewWidth, y), size = Size(2f, 2f))
-    }
-    // Kotlin note: when a function's last parameter is a lambda, it can go
-    // outside the parentheses, the same as a Swift trailing closure. Here the
-    // lambda gives every cell the same color.
-    drawSprite(MOON, left = viewWidth * 0.75f, top = 28f) { faded }
 }
 
 /** Screen y (units down from the top) for a world height (units up from the ground). */
 private fun screenY(worldY: Float) = GROUND_LINE - worldY
 
-private fun DrawScope.drawGround(distance: Float, viewWidth: Float, ink: Color) {
-    drawRect(ink, topLeft = Offset(0f, GROUND_LINE), size = Size(viewWidth, 2f))
+private fun DrawScope.drawGround(distance: Float, viewWidth: Float, colors: SceneColors) {
+    drawRect(colors.groundFill, Offset(0f, GROUND_LINE), Size(viewWidth, VIEW_HEIGHT - GROUND_LINE))
+    drawRect(colors.ink, Offset(0f, GROUND_LINE), Size(viewWidth, 2f))
 
     // Pebbles are placed on a fixed grid in world space, then shifted left by
     // the distance run, so they appear to scroll. Each slot's index picks its
     // look, so a pebble keeps its shape as it moves across the screen.
-    val firstSlot = (distance / PEBBLE_SPACING).toInt()
+    val firstSlot = floor(distance / PEBBLE_SPACING).toInt()
     val slotsOnScreen = (viewWidth / PEBBLE_SPACING).toInt() + 2
     for (slot in firstSlot until firstSlot + slotsOnScreen) {
         val variant = (slot * 37 + 11) % 7
         if (variant == 0) continue // leave some gaps so it doesn't look tiled
         val x = slot * PEBBLE_SPACING - distance
         val y = GROUND_LINE + 6f + (variant % 4) * 5f
-        drawRect(ink, topLeft = Offset(x, y), size = Size(2f + (variant % 3) * 2f, 2f))
+        drawRect(colors.ink, Offset(x, y), Size(2f + (variant % 3) * 2f, 2f), alpha = 0.6f)
+    }
+}
+
+// Obstacles. Each is drawn to fill its collision box, so what you see
+// matches what you can hit. Every surface has a lit left side and a shaded
+// right side, as if the light came from behind the player.
+
+private fun DrawScope.drawObstacle(obstacle: Obstacle, colors: SceneColors) {
+    // Kotlin note: `when` on an enum must list every entry (or use `else`), so
+    // adding a new ObstacleKind is a compile error here until it's drawn.
+    when (obstacle.kind) {
+        ObstacleKind.Rock -> drawRock(obstacle, colors)
+        ObstacleKind.Cactus -> drawCactus(obstacle.x, obstacle.width, obstacle.height, colors, arms = true, tall = false)
+        ObstacleKind.TallCactus -> drawCactus(obstacle.x, obstacle.width, obstacle.height, colors, arms = true, tall = true)
+        ObstacleKind.Cluster -> drawCluster(obstacle, colors)
+    }
+}
+
+/** A rounded boulder, built from stacked rows that narrow toward the top. */
+private fun DrawScope.drawRock(rock: Obstacle, colors: SceneColors) {
+    val top = screenY(rock.height)
+    val rows = max(3, (rock.height / 4f).roundToInt())
+    val rowHeight = rock.height / rows
+    for (row in 0 until rows) {
+        val fromBottom = (rows - 1 - row).toFloat() / rows
+        val inset = fromBottom.pow(1.6f) * rock.width * 0.35f
+        val x = rock.x + inset
+        val width = rock.width - inset * 2
+        val y = top + row * rowHeight
+        drawRect(colors.rockShade, Offset(x, y), Size(width, rowHeight + 0.5f))
+        // The bottom row is only half lit, which reads as a shadow on the ground.
+        val litHeight = if (row == rows - 1) rowHeight * 0.5f else rowHeight
+        drawRect(colors.rock, Offset(x, y), Size(width * 0.62f, litHeight + 0.5f))
+    }
+    // A couple of specks for texture.
+    drawRect(colors.rockShade, Offset(rock.x + rock.width * 0.3f, top + rock.height * 0.45f), Size(2f, 2f))
+    drawRect(colors.rock, Offset(rock.x + rock.width * 0.7f, top + rock.height * 0.7f), Size(2f, 2f))
+}
+
+/** Two or three cacti growing side by side, the middle one tallest. */
+private fun DrawScope.drawCluster(cluster: Obstacle, colors: SceneColors) {
+    val count = if (cluster.width >= 60f) 3 else 2
+    val each = cluster.width / count
+    for (i in 0 until count) {
+        // The shorter ones vary in a way that's stable for this obstacle.
+        val shorter = 0.62f + 0.09f * ((i * 7 + cluster.width.roundToInt()) % 3)
+        val height = if (i == count / 2) cluster.height else cluster.height * shorter
+        drawCactus(cluster.x + i * each + 1f, each - 2f, height, colors, arms = false, tall = false)
     }
 }
 
 /**
- * A blocky cactus filling the obstacle's box: a trunk down the middle, plus
- * two arms at different heights when it's wide enough. The arms reach the
- * edges of the box so what you see matches what you can hit.
+ * A blocky saguaro: a trunk with a rounded cap, rows of spines, and (if
+ * [arms]) two arms that bend up at the elbow.
  */
-private fun DrawScope.drawCactus(obstacle: Obstacle, color: Color) {
-    val top = screenY(obstacle.height)
-    val h = obstacle.height
-    if (obstacle.width < 24f) {
-        drawRect(color, Offset(obstacle.x, top), Size(obstacle.width, h))
-        return
+private fun DrawScope.drawCactus(x: Float, width: Float, height: Float, colors: SceneColors, arms: Boolean, tall: Boolean) {
+    val top = screenY(height)
+    val trunk = if (arms) max(8f, width * 0.46f) else width * 0.6f
+    val trunkX = x + (width - trunk) / 2
+
+    // Kotlin note: `segment` is a local function, visible only inside
+    // drawCactus. Each segment is shade, with its left 60% painted lit.
+    fun segment(sx: Float, sy: Float, sw: Float, sh: Float) {
+        drawRect(colors.cactusShade, Offset(sx, sy), Size(sw, sh))
+        drawRect(colors.cactus, Offset(sx, sy), Size(sw * 0.6f, sh))
     }
-    val trunk = obstacle.width * 0.5f
-    val arm = (obstacle.width - trunk) / 2
-    drawRect(color, Offset(obstacle.x + arm, top), Size(trunk, h))
-    drawRect(color, Offset(obstacle.x, top + h * 0.3f), Size(arm, h * 0.35f))
-    drawRect(color, Offset(obstacle.x + arm + trunk, top + h * 0.15f), Size(arm, h * 0.35f))
+
+    segment(trunkX, top + 2f, trunk, height - 2f)
+    segment(trunkX + 2f, top, trunk - 4f, 2f) // rounded cap
+
+    var spineY = top + 6f
+    while (spineY < GROUND_LINE - 4f) {
+        drawRect(colors.spine, Offset(trunkX + trunk * 0.25f, spineY), Size(1.5f, 1.5f))
+        drawRect(colors.spine, Offset(trunkX + trunk * 0.75f, spineY + 3f), Size(1.5f, 1.5f))
+        spineY += 7f
+    }
+
+    if (!arms) return
+    val armWidth = max(4f, (width - trunk) / 2 * 0.75f)
+    // Left arm: out from the trunk at the elbow, then straight up.
+    val leftElbow = top + height * (if (tall) 0.42f else 0.4f)
+    segment(x, leftElbow - height * 0.22f, armWidth, height * 0.22f + 4f)
+    segment(x + armWidth - 1f, leftElbow, trunkX - (x + armWidth) + 2f, 4f)
+    // Right arm: the same shape at a different height, so it isn't symmetrical.
+    val rightElbow = top + height * (if (tall) 0.42f else 0.45f)
+    val rightArmX = x + width - armWidth
+    segment(rightArmX, rightElbow - height * 0.18f, armWidth, height * 0.18f + 4f)
+    segment(trunkX + trunk - 1f, rightElbow, rightArmX - (trunkX + trunk) + 2f, 4f)
 }
 
-// The dino (and the moon) are drawn from text grids: X = body, P = back
-// plates, E = eye. A
-// grid is easier to read and tweak than a list of coordinates. Each sprite
-// is parsed once into a list of cells, not on every frame.
+// The dino. X = body, S = shade, B = belly, P = back plates, E = eye.
 
 private val BODY = Sprite(
     "........XXXX",
     "........XEXX",
     "...P.P..XXXX",
-    "..PXPXP.XXX.",
+    "..PXPXP.XXSS",
     "X.XXXXXXXXX.",
     "XXXXXXXXXXX.",
-    ".XXXXXXXXXX.",
-    "..XXXXXXX.X.",
-    "...XXXXXX...",
+    ".XXXXXXBBXX.",
+    "..SXXXXBB.X.",
+    "...SSSSSS...",
 )
-private val LEGS_STAND = Sprite("...XX.XX....", "...XX.XX....", "...XXX.XXX..")
-private val LEGS_RUN_A = Sprite("...XX.XX....", "...XX.......", "...XXX......")
-private val LEGS_RUN_B = Sprite("...XX.XX....", "......XX....", "......XXX...")
+// The far leg is shaded, so the run cycle reads as two legs, not one.
+private val LEGS_STAND = Sprite("...SS.XX....", "...SS.XX....", "...SSS.XXX..")
+private val LEGS_RUN_A = Sprite("...SS.XX....", "...SS.......", "...SSS......")
+private val LEGS_RUN_B = Sprite("...SS.XX....", "......XX....", "......XXX...")
+
+private val EYE = Color(0xFFFDFBF5)
+private val EYE_CRASHED = Color(0xFF2B2622)
 
 private fun DrawScope.drawDino(state: GameState, config: GameConfig, colors: SceneColors) {
     val player = state.world.player
-    val left = config.playerX
     val legsTop = screenY(player.y) - LEGS_STAND.rows * CELL
     // After a crash the eye goes dark. A small detail, but it reads instantly.
-    val eye = if (state is GameState.GameOver) colors.ink else colors.sky
+    val eye = if (state is GameState.GameOver) EYE_CRASHED else EYE
     val colorFor = { kind: Char ->
         when (kind) {
+            'S' -> colors.dinoShade
+            'B' -> colors.dinoBelly
             'P' -> colors.plates
             'E' -> eye
             else -> colors.dino
         }
     }
-    drawSprite(BODY, left, top = legsTop - BODY.rows * CELL, colorFor)
-    drawSprite(legsFor(state), left, top = legsTop, colorFor)
+    drawSprite(BODY, config.playerX, legsTop - BODY.rows * CELL, CELL, colorFor = colorFor)
+    drawSprite(legsFor(state), config.playerX, legsTop, CELL, colorFor = colorFor)
 }
 
 /** Two-frame run cycle while on the ground. Legs together otherwise. */
@@ -186,29 +195,4 @@ private fun legsFor(state: GameState): Sprite {
     if (state !is GameState.Playing || !state.world.player.isGrounded) return LEGS_STAND
     val frame = (state.world.distance / 18f).toInt() % 2
     return if (frame == 0) LEGS_RUN_A else LEGS_RUN_B
-}
-
-/** Draws each filled cell of [sprite], asking [colorFor] which color each kind of cell gets. */
-private fun DrawScope.drawSprite(sprite: Sprite, left: Float, top: Float, colorFor: (Char) -> Color) {
-    for (cell in sprite.cells) {
-        drawRect(
-            colorFor(cell.kind),
-            topLeft = Offset(left + cell.col * CELL, top + cell.row * CELL),
-            size = Size(CELL, CELL),
-        )
-    }
-}
-
-/**
- * Kotlin note: `vararg` takes any number of arguments, like `String...` in
- * Swift. `flatMapIndexed` / `mapIndexedNotNull` turn the grid into its filled
- * cells and drop the blanks.
- */
-private class Sprite(vararg grid: String) {
-    data class Cell(val col: Int, val row: Int, val kind: Char)
-
-    val rows = grid.size
-    val cells: List<Cell> = grid.flatMapIndexed { row, line ->
-        line.mapIndexedNotNull { col, kind -> if (kind == '.') null else Cell(col, row, kind) }
-    }
 }

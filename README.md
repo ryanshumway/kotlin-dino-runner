@@ -70,7 +70,10 @@ tap / frame tick ──▶ GameViewModel ──▶ GameEngine.press / release / 
 | `app/.../GameViewModel.kt` | Holds the state across rotation; turns events into engine calls. |
 | `app/.../HighScoreStore.kt` | Saves the best score with DataStore. |
 | `app/.../GameScreen.kt` | Frame loop (`withFrameNanos`), touch input, score overlay. |
-| `app/.../GameRenderer.kt` | Canvas drawing: day and night palettes, ground, cacti, and the dino from text grids. |
+| `app/.../GameRenderer.kt` | Draws the ground, rocks, cacti, and the dino. |
+| `app/.../Background.kt` | Parallax scenery: sky, sun and moon, clouds, mountains, hills, trees. |
+| `app/.../Palette.kt` | Day, sunset, and night palettes, and the blend between them. |
+| `app/.../Sprite.kt` | Turns text grids into blocky pictures. |
 
 ### A few choices worth calling out
 
@@ -101,6 +104,10 @@ tap / frame tick ──▶ GameViewModel ──▶ GameEngine.press / release / 
   `:game` stays free of storage code. The save compares against the stored best
   inside a DataStore transaction, so a lower score can never overwrite a higher
   one.
+- **Parallax from math, not assets.** Each background layer scrolls at a
+  fraction of the ground's speed. Mountain heights, clouds, and trees come
+  from hashing their position, so the scenery is endless, stable as it
+  scrolls, and needs no images or stored state.
 - **Cheap redraws.** The Canvas reads the game state inside its draw lambda,
   so each frame only re-runs drawing, not layout. The score overlay uses
   `derivedStateOf`, so it only rebuilds when the number on screen changes.

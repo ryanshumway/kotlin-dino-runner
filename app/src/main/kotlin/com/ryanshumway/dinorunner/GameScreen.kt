@@ -76,7 +76,7 @@ fun GameScreen(viewModel: GameViewModel = viewModel()) {
         // the state but only notifies when its computed result is different.
         val score by remember { derivedStateOf { viewModel.score } }
         val message by remember { derivedStateOf { messageFor(viewModel.state, viewModel.isNewHighScore) } }
-        val ink by remember { derivedStateOf { sceneColors(viewModel.nightAmount).ink } }
+        val ink by remember { derivedStateOf { sceneColors(viewModel.nightAmount).hud } }
         Hud(score, viewModel.highScore, message, ink)
     }
 }
