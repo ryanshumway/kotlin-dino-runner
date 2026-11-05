@@ -12,7 +12,10 @@ plugins {
 
 android {
     namespace = "com.ryanshumway.dinorunner"
-    compileSdk = 36
+    // compileSdk is the Android API version we build against. Current Compose
+    // libraries require 37. targetSdk (below) is separate: it opts the app in
+    // to new runtime behavior, so it moves only after testing on that version.
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.ryanshumway.dinorunner"
