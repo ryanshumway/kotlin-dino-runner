@@ -7,9 +7,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ryanshumway.dinorunner.game.Effects
 import com.ryanshumway.dinorunner.game.GameConfig
 import com.ryanshumway.dinorunner.game.GameEngine
 import com.ryanshumway.dinorunner.game.GameState
+import com.ryanshumway.dinorunner.game.next
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -47,6 +49,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     var isNewHighScore: Boolean by mutableStateOf(false)
         private set
 
+    /** Dust, shake, and score blink. Purely visual. */
+    var effects: Effects by mutableStateOf(Effects())
+        private set
+
     val score: Int get() = engine.score(state)
     val nightAmount: Float get() = engine.nightAmount(state)
 
@@ -61,27 +67,44 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun onPress() {
-        state = engine.press(state)
-        if (state is GameState.Playing) isNewHighScore = false
+    /** Returns true if this press started a jump, so the screen can play a haptic tick. */
+    fun onPress(): Boolean {
+        val before = state
+        advance(engine.press(state), dt = 0f)
+        return before.world.player.isGrounded && !state.world.player.isGrounded
     }
 
     fun onRelease() {
-        state = engine.release(state)
+        advance(engine.release(state), dt = 0f)
     }
 
     fun onFrame(frameSeconds: Float) {
-        val before = state
-        state = engine.step(state, frameSeconds, viewWidth)
-        // The engine just reports the crash. Deciding what to do about it,
-        // here saving a score, is the app's job, which keeps :game free of
-        // any storage code.
-        if (before !is GameState.GameOver && state is GameState.GameOver) onRunEnded(score)
+        advance(engine.step(state, frameSeconds, viewWidth), frameSeconds)
+    }
+
+    /** The app went to the background. */
+    fun onPause() {
+        advance(engine.pause(state), dt = 0f)
     }
 
     /** The renderer always shows VIEW_HEIGHT units vertically, so width follows the aspect ratio. */
     fun onViewportChanged(widthPx: Int, heightPx: Int) {
         if (heightPx > 0) viewWidth = widthPx.toFloat() / heightPx * VIEW_HEIGHT
+    }
+
+    /**
+     * Every state change goes through here, so effects and the high score
+     * can react to it in one place, whatever caused it.
+     */
+    private fun advance(next: GameState, dt: Float) {
+        val before = state
+        effects = effects.next(before, next, dt, config)
+        state = next
+        // The engine just reports the crash. Deciding what to do about it,
+        // here saving a score, is the app's job, which keeps :game free of
+        // any storage code.
+        if (before !is GameState.GameOver && next is GameState.GameOver) onRunEnded(score)
+        if (before is GameState.GameOver && next is GameState.Playing) isNewHighScore = false
     }
 
     private fun onRunEnded(finalScore: Int) {

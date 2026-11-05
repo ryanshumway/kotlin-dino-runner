@@ -23,12 +23,19 @@ class GameEngine(
     fun press(state: GameState): GameState = when (state) {
         is GameState.Ready -> GameState.Playing(state.world.withPlayer { it.jump(config) })
         is GameState.Playing -> state.copy(world = state.world.withPlayer { it.jump(config) })
+        // The first tap starts the countdown; taps during it are ignored.
+        is GameState.Paused ->
+            if (state.resumeIn == null) state.copy(resumeIn = config.resumeCountdownSeconds) else state
         is GameState.GameOver ->
             // One tap restarts straight into a new run, already jumping, but
             // only once the restart delay has passed.
             if (state.secondsSinceCrash < config.restartDelaySeconds) state
             else GameState.Playing(World().withPlayer { it.jump(config) })
     }
+
+    /** The app left the foreground. Only a live run needs pausing. */
+    fun pause(state: GameState): GameState =
+        if (state is GameState.Playing) GameState.Paused(state.world) else state
 
     /** Finger up / spacebar up. Only matters mid-jump. */
     fun release(state: GameState): GameState = when (state) {
@@ -49,6 +56,7 @@ class GameEngine(
         return when (state) {
             is GameState.Ready -> state
             is GameState.GameOver -> state.copy(secondsSinceCrash = state.secondsSinceCrash + dt)
+            is GameState.Paused -> stepPaused(state, dt)
             is GameState.Playing -> stepPlaying(state.world, dt, viewWidth)
         }
     }
@@ -78,6 +86,13 @@ class GameEngine(
         val fade = (pointsIntoPeriod / config.dayNightFadePoints).coerceIn(0f, 1f)
         // Odd periods are night (fading in), even periods are day (fading out).
         return if (period % 2 == 1) fade else 1f - fade
+    }
+
+    private fun stepPaused(state: GameState.Paused, dt: Float): GameState {
+        // Kotlin note: `?: return state` reads "if resumeIn is null, return
+        // early". It's the Elvis operator, like `guard let ... else { return }`.
+        val remaining = (state.resumeIn ?: return state) - dt
+        return if (remaining <= 0f) GameState.Playing(state.world) else state.copy(resumeIn = remaining)
     }
 
     private fun stepPlaying(world: World, dt: Float, viewWidth: Float): GameState {

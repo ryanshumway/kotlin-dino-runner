@@ -5,6 +5,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.lerp
+import com.ryanshumway.dinorunner.game.Effects
 import com.ryanshumway.dinorunner.game.GameConfig
 import com.ryanshumway.dinorunner.game.GameState
 import com.ryanshumway.dinorunner.game.Obstacle
@@ -13,6 +15,7 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 // Drawing only: this file reads a GameState and paints it. Nothing here
 // changes state.
@@ -29,17 +32,56 @@ const val GROUND_LINE = 190f
 private const val CELL = 4f
 private const val PEBBLE_SPACING = 26f
 
-fun DrawScope.drawGame(state: GameState, config: GameConfig, night: Float, motion: Boolean = true) {
+/**
+ * Draws one frame. [motion] is false when the system's "Remove animations"
+ * setting is on: the background holds still and the crash shake is skipped.
+ */
+fun DrawScope.drawGame(
+    state: GameState,
+    config: GameConfig,
+    night: Float,
+    effects: Effects,
+    motion: Boolean,
+) {
     val scale = size.height / VIEW_HEIGHT
     val viewWidth = size.width / scale
     val colors = sceneColors(night)
     val distance = state.world.distance
 
-    withTransform({ scale(scale, scale, pivot = Offset.Zero) }) {
+    // A quick side-to-side shake that dies down over its duration.
+    val shakeX = if (motion && effects.shake > 0f) {
+        sin(effects.shake * 70f) * 3f * (effects.shake / config.shakeSeconds)
+    } else {
+        0f
+    }
+
+    withTransform({
+        scale(scale, scale, pivot = Offset.Zero)
+        translate(left = shakeX)
+    }) {
         drawBackground(distance, night, viewWidth, colors, motion)
         drawGround(distance, viewWidth, colors)
         state.world.obstacles.forEach { drawObstacle(it, colors) }
+        drawDust(effects, distance, config, colors)
         drawDino(state, config, colors)
+    }
+}
+
+/**
+ * Each puff is four specks that spread out, rise a little, and fade. A puff
+ * remembers where on the ground it happened, so it drifts back with the ground.
+ */
+private fun DrawScope.drawDust(effects: Effects, distance: Float, config: GameConfig, colors: SceneColors) {
+    val dust = lerp(colors.groundFill, colors.ink, 0.35f)
+    for (puff in effects.puffs) {
+        val t = puff.age / config.puffSeconds // 0 when new, 1 when gone
+        val x = puff.worldX - distance
+        for (k in 0 until 4) {
+            val spread = (k - 1.5f) * 6f * (0.5f + t)
+            val rise = t * 8f + (k % 2) * 3f
+            val speck = 1f + 3f * (1f - t)
+            drawRect(dust, Offset(x + spread, GROUND_LINE - 2f - rise), Size(speck, speck), alpha = 0.7f * (1f - t))
+        }
     }
 }
 

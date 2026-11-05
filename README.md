@@ -19,7 +19,12 @@ idiom differs from what a Swift or React developer would expect.
 - [x] Obstacles at random sizes and intervals, collision, game over and restart
 - [x] Speed ramp
 - [x] High score saved with DataStore
-- [x] Day/night cycle every 500 points
+- [x] Day/night cycle every 500 points, through a sunset
+- [x] Rocks (tap), tall cacti (hold), and cactus clusters
+- [x] Parallax scenery: mountains, hills, trees, clouds, sun and moon
+- [x] Dust, crash shake, milestone blink, haptics
+- [x] Pauses in the background, resumes with a countdown
+- [x] Accessibility: respects "Remove animations", TalkBack announcements
 - [ ] Web build (Compose Multiplatform, Wasm)
 
 ## Build and run
@@ -65,7 +70,8 @@ tap / frame tick ──▶ GameViewModel ──▶ GameEngine.press / release / 
 | `game/.../Physics.kt` | `Player` and its jump, release, and per-frame step. |
 | `game/.../Obstacles.kt` | `Obstacle`, and the spawner that picks sizes and gaps. |
 | `game/.../Collision.kt` | Rectangle overlap, and the player's forgiving hitbox. |
-| `game/.../GameState.kt` | `sealed interface GameState`: `Ready`, `Playing`, `GameOver`. |
+| `game/.../GameState.kt` | `sealed interface GameState`: `Ready`, `Playing`, `Paused`, `GameOver`. |
+| `game/.../Effects.kt` | When to show dust, shake the screen, or blink the score. |
 | `game/.../GameEngine.kt` | Pure functions from (state, input) to the next state. |
 | `app/.../GameViewModel.kt` | Holds the state across rotation; turns events into engine calls. |
 | `app/.../HighScoreStore.kt` | Saves the best score with DataStore. |
@@ -108,13 +114,22 @@ tap / frame tick ──▶ GameViewModel ──▶ GameEngine.press / release / 
   fraction of the ground's speed. Mountain heights, clouds, and trees come
   from hashing their position, so the scenery is endless, stable as it
   scrolls, and needs no images or stored state.
+- **Accessibility is part of the design.** With Android's "Remove
+  animations" setting on, the scenery holds still and the shake and blink
+  are skipped, while the ground still scrolls so the game stays playable.
+  Game over, new high scores, and the resume countdown are announced to
+  TalkBack through a live region.
+- **Effects are tested too.** Dust, shake, and the milestone blink are
+  visual, but *when* they happen is decided in `:game` by comparing the
+  state before and after each change, so it's covered by tests like the
+  rules are.
 - **Cheap redraws.** The Canvas reads the game state inside its draw lambda,
   so each frame only re-runs drawing, not layout. The score overlay uses
   `derivedStateOf`, so it only rebuilds when the number on screen changes.
 
 ## Tests
 
-`game/src/commonTest` has 42 tests covering:
+`game/src/commonTest` has 60 tests covering:
 
 - **Jump physics:** peak height, no double jump, landing, variable jump
   height, frame-rate independence.
@@ -123,6 +138,12 @@ tap / frame tick ──▶ GameViewModel ──▶ GameEngine.press / release / 
   seeded runs repeat exactly, the shortest gap is always clearable.
 - **Engine rules:** state transitions, scrolling, spawning at the screen edge,
   speed ramp and cap, crashing, clearing an obstacle with a jump, restart delay.
+- **Jump clearance:** a tap clears the biggest rock, no tap clears a tall
+  cactus, and a held jump clears the biggest of every kind (checked across
+  every jump timing).
+- **Pause:** freezing, the countdown, and resuming exactly where you left off.
+- **Effects:** dust on takeoff and landing, crash shake, milestone blink,
+  and a clean slate on restart.
 - **Day/night:** daylight at the start, the fade at each milestone, full
   night, dawn, and the sky holding still after a crash.
 

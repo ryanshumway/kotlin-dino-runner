@@ -19,10 +19,10 @@ data class World(
  * always draw it: the idle dino before a run, or the frozen scene after a crash.
  *
  * Kotlin note: a `sealed interface` is a closed set of cases, like a Swift
- * `enum` with associated values. A `when (state)` that covers all three needs
- * no `else`, and adding a fourth phase makes the compiler flag every `when`
- * that forgot to handle it. Each case can also carry its own data, like
- * GameOver's timer below.
+ * `enum` with associated values. A `when (state)` that covers every case needs
+ * no `else`, and adding a phase makes the compiler flag every `when` that
+ * forgot to handle it. (That's exactly what happened when Paused was added.)
+ * Each case can also carry its own data, like GameOver's timer below.
  */
 sealed interface GameState {
     val world: World
@@ -32,6 +32,13 @@ sealed interface GameState {
 
     /** The run is live. The world advances every frame. */
     data class Playing(override val world: World) : GameState
+
+    /**
+     * The app went to the background mid-run. The world is frozen until a
+     * tap, which starts a countdown ([resumeIn] seconds left) so the player
+     * has time to get ready. `null` means waiting for that tap.
+     */
+    data class Paused(override val world: World, val resumeIn: Float? = null) : GameState
 
     /** The player crashed. The world is frozen until a tap after the restart delay. */
     data class GameOver(override val world: World, val secondsSinceCrash: Float = 0f) : GameState

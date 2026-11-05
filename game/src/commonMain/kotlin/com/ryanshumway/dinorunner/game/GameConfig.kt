@@ -72,6 +72,18 @@ data class GameConfig(
      * too late doesn't instantly restart the game and hide the final score.
      */
     val restartDelaySeconds: Float = 0.5f,
+    /** After pausing, a tap starts a countdown this long before the run resumes. */
+    val resumeCountdownSeconds: Float = 3f,
+
+    // Effects (purely visual, but timed here so they're testable)
+    /** How long a dust puff lasts. */
+    val puffSeconds: Float = 0.35f,
+    /** How long the screen shakes after a crash. */
+    val shakeSeconds: Float = 0.3f,
+    /** The score blinks for this long at each milestone. */
+    val flashSeconds: Float = 0.9f,
+    /** A milestone every this many points. */
+    val flashEveryPoints: Int = 100,
     /**
      * Longest frame we will simulate in one step. If the app stalls (a GC
      * pause, or coming back from the background), a huge delta would teleport
