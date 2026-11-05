@@ -12,20 +12,60 @@ package com.ryanshumway.dinorunner.game
  * can write `GameConfig(gravity = 1000f)` to change just one.
  */
 data class GameConfig(
+    // Player
+    /** The player's fixed left edge. The world scrolls past it. */
+    val playerX: Float = 48f,
+    val playerWidth: Float = 48f,
+    val playerHeight: Float = 48f,
+    /**
+     * How far the collision box is shrunk inside the drawn dino on the left,
+     * right and top. The dino isn't a rectangle, so a full-size box would
+     * count "hits" that look like clear misses.
+     */
+    val hitboxInset: Float = 6f,
+
+    // Jumping
     /** Downward acceleration while airborne, in units/s². */
     val gravity: Float = 2_600f,
     /** Upward speed at the moment of a jump. Peak height is v² / 2g, about 129 units. */
     val jumpVelocity: Float = 820f,
     /** On release, upward speed is capped to this, so a quick tap gives a short hop. */
     val jumpCutVelocity: Float = 320f,
+
+    // Speed
     /** Horizontal scroll speed at the start of a run, in units/s. */
     val runSpeed: Float = 360f,
+    /** Speed added for each point scored, so the run gets harder gradually. */
+    val speedGainPerPoint: Float = 0.6f,
+    /** Speed never goes above this. Reached at about 900 points. */
+    val maxSpeed: Float = 900f,
+
+    // Obstacles
+    val obstacleMinWidth: Float = 16f,
+    val obstacleMaxWidth: Float = 40f,
+    val obstacleMinHeight: Float = 28f,
+    val obstacleMaxHeight: Float = 64f,
+    /**
+     * Gaps between obstacles are measured in seconds of running, not in
+     * distance, so the time you get to react stays fair as speed rises. The
+     * minimum must be longer than a full jump (about 0.63 s) so there's always
+     * room to land before the next one.
+     */
+    val minGapSeconds: Float = 0.8f,
+    val maxGapSeconds: Float = 1.8f,
+
+    // Scoring and timing
     /** Distance that earns one point. 360 / 36 is 10 points per second at the start. */
     val unitsPerPoint: Float = 36f,
     /**
+     * After a crash, taps are ignored this long, so a jump pressed a moment
+     * too late doesn't instantly restart the game and hide the final score.
+     */
+    val restartDelaySeconds: Float = 0.5f,
+    /**
      * Longest frame we will simulate in one step. If the app stalls (a GC
      * pause, or coming back from the background), a huge delta would teleport
-     * the player, so we clamp it.
+     * the player through an obstacle, so we clamp it.
      */
     val maxFrameSeconds: Float = 1f / 20f,
 )

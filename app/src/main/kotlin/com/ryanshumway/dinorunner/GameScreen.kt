@@ -11,10 +11,14 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -45,6 +49,7 @@ fun GameScreen(viewModel: GameViewModel = viewModel()) {
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .onSizeChanged { viewModel.onViewportChanged(it.width, it.height) }
             .semantics { contentDescription = "Dino runner. Tap to jump, hold to jump higher." }
             // One gesture is one press and release. Reporting both edges is
             // what lets a long hold give a higher jump than a quick tap.
@@ -59,15 +64,29 @@ fun GameScreen(viewModel: GameViewModel = viewModel()) {
     ) {
         // `viewModel.state` is read inside the draw lambda, not in the
         // composable body, so a new frame only re-runs drawing. Compose skips
-        // rebuilding the layout, which keeps the per-frame cost low.
-        Canvas(Modifier.fillMaxSize()) { drawGame(viewModel.state) }
+        // recomposition and layout, which keeps the per-frame cost low.
+        Canvas(Modifier.fillMaxSize()) { drawGame(viewModel.state, viewModel.config) }
 
-        Hud(viewModel.state, viewModel.score)
+        // The overlay should only rebuild when what it shows changes: the score
+        // ticks about 10 times a second and the message only on a phase change,
+        // while the state itself changes every frame. `derivedStateOf` watches
+        // the state but only notifies when its computed result is different.
+        val score by remember { derivedStateOf { viewModel.score } }
+        val message by remember { derivedStateOf { messageFor(viewModel.state) } }
+        Hud(score, message)
     }
 }
 
+// Kotlin note: `when` is an expression, so it returns the message directly,
+// and it must cover every GameState case. `String?` means "a String or null".
+private fun messageFor(state: GameState): String? = when (state) {
+    is GameState.Ready -> "TAP TO RUN"
+    is GameState.Playing -> null
+    is GameState.GameOver -> "GAME OVER · TAP TO RETRY"
+}
+
 @Composable
-private fun Hud(state: GameState, score: Int) {
+private fun Hud(score: Int, message: String?) {
     val style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 20.sp, color = Palette.ink)
     Box(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp)) {
         BasicText(
@@ -75,13 +94,6 @@ private fun Hud(state: GameState, score: Int) {
             style = style,
             modifier = Modifier.align(Alignment.TopEnd),
         )
-        // Kotlin note: `when` is an expression, so it returns the message
-        // directly, and it must cover every GameState case.
-        val message = when (state) {
-            is GameState.Ready -> "TAP TO RUN"
-            is GameState.Playing -> null
-            is GameState.GameOver -> "GAME OVER · TAP TO RETRY"
-        }
         // `?.let` runs only when message isn't null, like `if let` in Swift.
         message?.let { BasicText(it, style = style, modifier = Modifier.align(Alignment.Center)) }
     }

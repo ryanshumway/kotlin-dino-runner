@@ -1,14 +1,21 @@
 package com.ryanshumway.dinorunner.game
 
+import kotlin.random.Random
+
 /**
- * The rules of the game, as pure functions: given a state and an input (a
- * press, a release, or time passing), return the next state.
+ * The rules of the game, as functions: given a state and an input (a press, a
+ * release, or time passing), return the next state.
  *
  * Nothing here knows about Android, Compose, or the clock, so the whole game
  * can be unit tested by calling these functions with made-up timings. This is
- * the same idea as a Redux reducer, or a SwiftUI model kept free of views.
+ * the same idea as a Redux reducer, or a SwiftUI model kept free of views. The
+ * only outside input is [random], which tests replace with a seeded one.
  */
-class GameEngine(private val config: GameConfig = GameConfig()) {
+class GameEngine(
+    private val config: GameConfig = GameConfig(),
+    random: Random = Random.Default,
+) {
+    private val spawner = ObstacleSpawner(config, random)
 
     fun newGame(): GameState = GameState.Ready()
 
@@ -16,8 +23,11 @@ class GameEngine(private val config: GameConfig = GameConfig()) {
     fun press(state: GameState): GameState = when (state) {
         is GameState.Ready -> GameState.Playing(state.world.withPlayer { it.jump(config) })
         is GameState.Playing -> state.copy(world = state.world.withPlayer { it.jump(config) })
-        // One tap restarts straight into a new run, already jumping.
-        is GameState.GameOver -> GameState.Playing(World().withPlayer { it.jump(config) })
+        is GameState.GameOver ->
+            // One tap restarts straight into a new run, already jumping, but
+            // only once the restart delay has passed.
+            if (state.secondsSinceCrash < config.restartDelaySeconds) state
+            else GameState.Playing(World().withPlayer { it.jump(config) })
     }
 
     /** Finger up / spacebar up. Only matters mid-jump. */
@@ -28,24 +38,58 @@ class GameEngine(private val config: GameConfig = GameConfig()) {
 
     /**
      * Advance the game by [frameSeconds], the real time since the last frame.
+     * [viewWidth] is how many world units wide the screen is, so obstacles
+     * appear just past its right edge on any screen size.
+     *
      * Movement is speed × time, never "pixels per frame", so the game runs at
      * the same pace on a 60 Hz and a 120 Hz screen.
      */
-    fun step(state: GameState, frameSeconds: Float): GameState {
-        if (state !is GameState.Playing) return state
-        // Kotlin note: after the `!is` check above, the compiler "smart casts"
-        // `state` to Playing, so `state.copy` below needs no cast.
+    fun step(state: GameState, frameSeconds: Float, viewWidth: Float): GameState {
         val dt = frameSeconds.coerceIn(0f, config.maxFrameSeconds)
-        val world = state.world
-        return state.copy(
-            world = world.copy(
-                player = world.player.step(dt, config),
-                distance = world.distance + config.runSpeed * dt,
-            ),
-        )
+        return when (state) {
+            is GameState.Ready -> state
+            is GameState.GameOver -> state.copy(secondsSinceCrash = state.secondsSinceCrash + dt)
+            is GameState.Playing -> stepPlaying(state.world, dt, viewWidth)
+        }
     }
 
+    /** Current scroll speed: ramps up with the score, then holds at the cap. */
+    fun speedAt(distance: Float): Float =
+        (config.runSpeed + config.speedGainPerPoint * distance / config.unitsPerPoint)
+            .coerceAtMost(config.maxSpeed)
+
     fun score(state: GameState): Int = (state.world.distance / config.unitsPerPoint).toInt()
+
+    private fun stepPlaying(world: World, dt: Float, viewWidth: Float): GameState {
+        val scrolled = speedAt(world.distance) * dt
+
+        // Move every obstacle left, and forget the ones that are fully off
+        // screen. Kotlin note: `map` and `filter` work like their JavaScript
+        // and Swift counterparts and return new lists.
+        var obstacles = world.obstacles
+            .map { it.copy(x = it.x - scrolled) }
+            .filter { it.x + it.width > 0f }
+
+        // Spawn the next obstacle once enough distance has been covered. The
+        // leftover (a negative remainder) is carried over so spacing doesn't
+        // drift with frame timing.
+        var untilNext = world.untilNextObstacle - scrolled
+        if (untilNext <= 0f) {
+            obstacles = obstacles + spawner.spawn(x = viewWidth + untilNext)
+            untilNext += spawner.nextGap(speedAt(world.distance))
+        }
+
+        val next = world.copy(
+            player = world.player.step(dt, config),
+            obstacles = obstacles,
+            distance = world.distance + scrolled,
+            untilNextObstacle = untilNext,
+        )
+
+        val hitbox = next.player.hitbox(config)
+        val crashed = next.obstacles.any { hitbox overlaps it.box }
+        return if (crashed) GameState.GameOver(next) else GameState.Playing(next)
+    }
 
     // Kotlin note: a private extension taking a lambda, so call sites read as
     // `world.withPlayer { it.jump(config) }`. `it` is the lambda's implicit

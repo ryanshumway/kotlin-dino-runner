@@ -1,7 +1,8 @@
 # Kotlin Dino Runner
 
 A small endless runner for Android, built with Kotlin and Jetpack Compose. A
-blocky dinosaur runs on scrolling ground: tap to jump, hold to jump higher.
+blocky dinosaur runs on scrolling ground and jumps over cacti that come faster
+as the score climbs: tap to jump, hold to jump higher.
 Everything is drawn with simple Canvas shapes, with no sprite sheets or image
 assets.
 
@@ -15,8 +16,8 @@ idiom differs from what a Swift or React developer would expect.
 ## Status
 
 - [x] Dino runs and jumps on scrolling ground (variable-height jump, two-frame run cycle)
-- [ ] Obstacles, collision, and game over
-- [ ] Speed ramp
+- [x] Obstacles at random sizes and intervals, collision, game over and restart
+- [x] Speed ramp
 - [ ] High score saved with DataStore
 - [ ] Day/night color flip
 - [ ] Web build (Compose Multiplatform, Wasm)
@@ -62,11 +63,13 @@ tap / frame tick ──▶ GameViewModel ──▶ GameEngine.press / release / 
 |---|---|
 | `game/.../GameConfig.kt` | Every tunable number: gravity, jump speed, run speed. |
 | `game/.../Physics.kt` | `Player` and its jump, release, and per-frame step. |
+| `game/.../Obstacles.kt` | `Obstacle`, and the spawner that picks sizes and gaps. |
+| `game/.../Collision.kt` | Rectangle overlap, and the player's forgiving hitbox. |
 | `game/.../GameState.kt` | `sealed interface GameState`: `Ready`, `Playing`, `GameOver`. |
 | `game/.../GameEngine.kt` | Pure functions from (state, input) to the next state. |
 | `app/.../GameViewModel.kt` | Holds the state across rotation; turns events into engine calls. |
 | `app/.../GameScreen.kt` | Frame loop (`withFrameNanos`), touch input, score overlay. |
-| `app/.../GameRenderer.kt` | Canvas drawing: ground, pebbles, and the dino from text grids. |
+| `app/.../GameRenderer.kt` | Canvas drawing: ground, pebbles, cacti, and the dino from text grids. |
 
 ### A few choices worth calling out
 
@@ -79,13 +82,30 @@ tap / frame tick ──▶ GameViewModel ──▶ GameEngine.press / release / 
   mutated in place, which is what makes the engine easy to test.
 - **Hold to jump higher.** A press sets full jump speed. Releasing early caps
   the upward speed, so a quick tap is a short hop.
+- **Fair obstacles.** Gaps between obstacles are measured in seconds of
+  running, not distance, so reaction time stays the same as speed rises. The
+  shortest gap is longer than a full jump, so there's always room to land.
+- **Forgiving collision.** The hitbox is a little smaller than the drawn dino,
+  so a graze that looks like a miss is a miss.
+- **Testable randomness.** The spawner takes a `Random` as a constructor
+  parameter. Tests pass `Random(seed)` so every "random" run is repeatable.
+- **No accidental restarts.** Taps are ignored for half a second after a crash,
+  so a late jump doesn't skip past your final score.
 - **Cheap redraws.** The Canvas reads the game state inside its draw lambda,
-  so each frame only re-runs drawing, not layout.
+  so each frame only re-runs drawing, not layout. The score overlay uses
+  `derivedStateOf`, so it only rebuilds when the number on screen changes.
 
 ## Tests
 
-`game/src/commonTest` covers jump physics (peak height, no double jump,
-landing, variable jump height, frame-rate independence) and engine rules
-(state transitions, scrolling, delta-time clamping, scoring). They use
-`kotlin.test`, Kotlin's own test library, so they'll also run on the web
-target later.
+`game/src/commonTest` has 37 tests covering:
+
+- **Jump physics:** peak height, no double jump, landing, variable jump
+  height, frame-rate independence.
+- **Collision:** overlap, near misses, touching edges, the forgiving hitbox.
+- **Obstacle spawning:** sizes and gaps stay in range, gaps scale with speed,
+  seeded runs repeat exactly, the shortest gap is always clearable.
+- **Engine rules:** state transitions, scrolling, spawning at the screen edge,
+  speed ramp and cap, crashing, clearing an obstacle with a jump, restart delay.
+
+They use `kotlin.test`, Kotlin's own test library, so they'll also run on the
+web target later.

@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import com.ryanshumway.dinorunner.game.GameConfig
 import com.ryanshumway.dinorunner.game.GameEngine
 import com.ryanshumway.dinorunner.game.GameState
 
@@ -20,7 +21,11 @@ import com.ryanshumway.dinorunner.game.GameState
  * `@Published`. `private set` means only this class can write it.
  */
 class GameViewModel : ViewModel() {
-    private val engine = GameEngine()
+    val config = GameConfig()
+    private val engine = GameEngine(config)
+
+    /** Screen width in world units. Updated when the screen is measured. */
+    private var viewWidth = 640f
 
     var state: GameState by mutableStateOf(engine.newGame())
         private set
@@ -36,6 +41,11 @@ class GameViewModel : ViewModel() {
     }
 
     fun onFrame(frameSeconds: Float) {
-        state = engine.step(state, frameSeconds)
+        state = engine.step(state, frameSeconds, viewWidth)
+    }
+
+    /** The renderer always shows VIEW_HEIGHT units vertically, so width follows the aspect ratio. */
+    fun onViewportChanged(widthPx: Int, heightPx: Int) {
+        if (heightPx > 0) viewWidth = widthPx.toFloat() / heightPx * VIEW_HEIGHT
     }
 }
