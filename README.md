@@ -6,8 +6,12 @@ as the score climbs: tap to jump, hold to jump higher.
 Everything is drawn with simple Canvas shapes, with no sprite sheets or image
 assets.
 
-<!-- TODO: replace with a GIF recorded from the emulator -->
-![Gameplay screenshot placeholder](docs/screenshot.png)
+[![CI](https://github.com/ryanshumway/kotlin-dino-runner/actions/workflows/ci.yml/badge.svg)](https://github.com/ryanshumway/kotlin-dino-runner/actions/workflows/ci.yml)
+
+![Gameplay: a blocky dinosaur jumps rocks and cacti as day turns to sunset](site/gameplay.gif)
+
+**[Project page](https://ryanshumway.github.io/kotlin-dino-runner/)** ·
+**[Download for Android](https://github.com/ryanshumway/kotlin-dino-runner/releases/latest/download/dino-runner.apk)**
 
 I'm a product designer who usually works in React and SwiftUI. I built this to
 learn idiomatic Kotlin and Compose, so the code is commented where a Kotlin

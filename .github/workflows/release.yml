@@ -1,0 +1,35 @@
+# Builds the Android app and publishes it as a GitHub Release when a version
+# tag is pushed (for example: git tag v1.0.0 && git push origin v1.0.0).
+#
+# The APK is always attached as "dino-runner.apk", so this link keeps
+# pointing at the newest one:
+# https://github.com/ryanshumway/kotlin-dino-runner/releases/latest/download/dino-runner.apk
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Test and build
+        run: ./gradlew :game:allTests :app:assembleDebug
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk dino-runner.apk
+          gh release create "$GITHUB_REF_NAME" dino-runner.apk \
+            --title "Dino Runner $GITHUB_REF_NAME" \
+            --notes "Android build of Dino Runner. Install dino-runner.apk on an Android 8.0+ phone (you may need to allow installs from your browser). This is a debug-signed build for trying the game, not a Play Store release."
