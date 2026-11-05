@@ -29,8 +29,12 @@ data class GameConfig(
     val gravity: Float = 2_600f,
     /** Upward speed at the moment of a jump. Peak height is v² / 2g, about 129 units. */
     val jumpVelocity: Float = 820f,
-    /** On release, upward speed is capped to this, so a quick tap gives a short hop. */
-    val jumpCutVelocity: Float = 320f,
+    /**
+     * On release, upward speed is capped to this, so a quick tap gives a short
+     * hop (a 50 ms tap peaks around 45 units, enough for a rock) while a held
+     * jump goes the full height (enough for a tall cactus).
+     */
+    val jumpCutVelocity: Float = 200f,
 
     // Speed
     /** Horizontal scroll speed at the start of a run, in units/s. */
@@ -40,13 +44,9 @@ data class GameConfig(
     /** Speed never goes above this. Reached at about 900 points. */
     val maxSpeed: Float = 900f,
 
-    // Obstacles
-    val obstacleMinWidth: Float = 16f,
-    val obstacleMaxWidth: Float = 40f,
-    val obstacleMinHeight: Float = 28f,
-    val obstacleMaxHeight: Float = 64f,
+    // Obstacles (sizes live on ObstacleKind)
     /**
-     * Gaps between obstacles are measured in seconds of running, not in
+     * Clear gaps between obstacles are measured in seconds of running, not in
      * distance, so the time you get to react stays fair as speed rises. The
      * minimum must be longer than a full jump (about 0.63 s) so there's always
      * room to land before the next one.

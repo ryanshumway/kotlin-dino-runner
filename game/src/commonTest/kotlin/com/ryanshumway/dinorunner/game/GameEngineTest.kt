@@ -77,6 +77,16 @@ class GameEngineTest {
     }
 
     @Test
+    fun nextGapIsMeasuredFromTheObstaclesRightEdge() {
+        val state = engine.step(GameState.Playing(World()), frame, viewWidth)
+        val obstacle = state.world.obstacles.single()
+        val minClearGap = config.runSpeed * config.minGapSeconds
+        // untilNextObstacle is measured from the spawn point (the obstacle's
+        // left edge), so it must cover the obstacle's width plus a full gap.
+        assertTrue(state.world.untilNextObstacle >= obstacle.width + minClearGap - 10f)
+    }
+
+    @Test
     fun obstaclesScrollTowardThePlayer() {
         val start = GameState.Playing(worldWith(Obstacle(x = 500f, width = 20f, height = 30f)))
         val state = engine.step(start, 0.05f, viewWidth)

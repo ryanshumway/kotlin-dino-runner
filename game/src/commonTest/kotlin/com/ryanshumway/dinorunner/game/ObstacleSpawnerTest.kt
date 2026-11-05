@@ -9,19 +9,34 @@ class ObstacleSpawnerTest {
     private val config = GameConfig()
 
     @Test
-    fun obstacleSizesStayInRange() {
+    fun obstacleSizesStayInRangeForTheirKind() {
         val spawner = ObstacleSpawner(config, Random(seed = 42))
-        repeat(1_000) {
-            val obstacle = spawner.spawn(x = 0f)
-            assertTrue(obstacle.width in config.obstacleMinWidth..config.obstacleMaxWidth)
-            assertTrue(obstacle.height in config.obstacleMinHeight..config.obstacleMaxHeight)
+        repeat(2_000) {
+            val obstacle = spawner.spawn(x = 0f, points = 10_000)
+            val kind = obstacle.kind
+            assertTrue(obstacle.width in kind.minWidth..kind.maxWidth, "$obstacle")
+            assertTrue(obstacle.height in kind.minHeight..kind.maxHeight, "$obstacle")
         }
+    }
+
+    @Test
+    fun earlyInARunOnlyEasyKindsAppear() {
+        val spawner = ObstacleSpawner(config, Random(seed = 3))
+        val kinds = List(500) { spawner.spawn(x = 0f, points = 0).kind }.toSet()
+        assertEquals(setOf(ObstacleKind.Rock, ObstacleKind.Cactus), kinds)
+    }
+
+    @Test
+    fun everyKindAppearsOnceUnlocked() {
+        val spawner = ObstacleSpawner(config, Random(seed = 3))
+        val kinds = List(500) { spawner.spawn(x = 0f, points = 1_000).kind }.toSet()
+        assertEquals(ObstacleKind.entries.toSet(), kinds)
     }
 
     @Test
     fun sizesActuallyVary() {
         val spawner = ObstacleSpawner(config, Random(seed = 42))
-        val heights = List(50) { spawner.spawn(x = 0f).height }.toSet()
+        val heights = List(50) { spawner.spawn(x = 0f, points = 0).height }.toSet()
         assertTrue(heights.size > 40, "expected varied heights, got ${heights.size} distinct")
     }
 
@@ -48,7 +63,7 @@ class ObstacleSpawnerTest {
     fun sameSeedGivesTheSameObstacles() {
         val a = ObstacleSpawner(config, Random(seed = 99))
         val b = ObstacleSpawner(config, Random(seed = 99))
-        assertEquals(List(10) { a.spawn(x = 0f) }, List(10) { b.spawn(x = 0f) })
+        assertEquals(List(10) { a.spawn(x = 0f, points = 500) }, List(10) { b.spawn(x = 0f, points = 500) })
     }
 
     @Test

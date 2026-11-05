@@ -92,11 +92,14 @@ class GameEngine(
 
         // Spawn the next obstacle once enough distance has been covered. The
         // leftover (a negative remainder) is carried over so spacing doesn't
-        // drift with frame timing.
+        // drift with frame timing. The next gap starts at the new obstacle's
+        // right edge, so a wide cluster doesn't eat into your landing room.
         var untilNext = world.untilNextObstacle - scrolled
         if (untilNext <= 0f) {
-            obstacles = obstacles + spawner.spawn(x = viewWidth + untilNext)
-            untilNext += spawner.nextGap(speedAt(world.distance))
+            val points = (world.distance / config.unitsPerPoint).toInt()
+            val spawned = spawner.spawn(x = viewWidth + untilNext, points = points)
+            obstacles = obstacles + spawned
+            untilNext += spawned.width + spawner.nextGap(speedAt(world.distance))
         }
 
         val next = world.copy(
