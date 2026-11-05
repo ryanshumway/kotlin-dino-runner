@@ -1,0 +1,13 @@
+# Gradle and Kotlin build output
+.gradle/
+.kotlin/
+build/
+
+# Machine-specific (Android Studio writes your SDK path here)
+local.properties
+
+# IDE
+.idea/
+*.iml
+captures/
+.DS_Store
