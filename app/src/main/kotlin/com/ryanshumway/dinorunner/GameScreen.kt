@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.contentDescription
@@ -65,32 +66,35 @@ fun GameScreen(viewModel: GameViewModel = viewModel()) {
         // `viewModel.state` is read inside the draw lambda, not in the
         // composable body, so a new frame only re-runs drawing. Compose skips
         // recomposition and layout, which keeps the per-frame cost low.
-        Canvas(Modifier.fillMaxSize()) { drawGame(viewModel.state, viewModel.config) }
+        Canvas(Modifier.fillMaxSize()) {
+            drawGame(viewModel.state, viewModel.config, viewModel.nightAmount)
+        }
 
         // The overlay should only rebuild when what it shows changes: the score
         // ticks about 10 times a second and the message only on a phase change,
         // while the state itself changes every frame. `derivedStateOf` watches
         // the state but only notifies when its computed result is different.
         val score by remember { derivedStateOf { viewModel.score } }
-        val message by remember { derivedStateOf { messageFor(viewModel.state) } }
-        Hud(score, message)
+        val message by remember { derivedStateOf { messageFor(viewModel.state, viewModel.isNewHighScore) } }
+        val ink by remember { derivedStateOf { sceneColors(viewModel.nightAmount).ink } }
+        Hud(score, viewModel.highScore, message, ink)
     }
 }
 
 // Kotlin note: `when` is an expression, so it returns the message directly,
 // and it must cover every GameState case. `String?` means "a String or null".
-private fun messageFor(state: GameState): String? = when (state) {
+private fun messageFor(state: GameState, isNewHighScore: Boolean): String? = when (state) {
     is GameState.Ready -> "TAP TO RUN"
     is GameState.Playing -> null
-    is GameState.GameOver -> "GAME OVER · TAP TO RETRY"
+    is GameState.GameOver -> if (isNewHighScore) "NEW HIGH SCORE · TAP TO RETRY" else "GAME OVER · TAP TO RETRY"
 }
 
 @Composable
-private fun Hud(score: Int, message: String?) {
-    val style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 20.sp, color = Palette.ink)
+private fun Hud(score: Int, highScore: Int, message: String?, ink: Color) {
+    val style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 20.sp, color = ink)
     Box(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp)) {
         BasicText(
-            text = score.toString().padStart(5, '0'),
+            text = "HI ${highScore.padded()}  ${score.padded()}",
             style = style,
             modifier = Modifier.align(Alignment.TopEnd),
         )
@@ -98,3 +102,6 @@ private fun Hud(score: Int, message: String?) {
         message?.let { BasicText(it, style = style, modifier = Modifier.align(Alignment.Center)) }
     }
 }
+
+/** Arcade-style zero padding: 42 becomes "00042". */
+private fun Int.padded(): String = toString().padStart(5, '0')

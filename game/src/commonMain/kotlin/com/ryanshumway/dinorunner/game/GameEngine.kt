@@ -60,6 +60,26 @@ class GameEngine(
 
     fun score(state: GameState): Int = (state.world.distance / config.unitsPerPoint).toInt()
 
+    /**
+     * How dark the sky is: 0 is full day, 1 is full night. The sky flips at
+     * every [GameConfig.dayNightEveryPoints] (night at 500, day again at
+     * 1000, and so on), fading over [GameConfig.dayNightFadePoints] instead
+     * of snapping.
+     *
+     * It's derived from distance rather than stored, so it needs no extra
+     * state: a crash freezes the sky along with everything else, and a new
+     * run starts in daylight.
+     */
+    fun nightAmount(state: GameState): Float {
+        val points = state.world.distance / config.unitsPerPoint
+        val period = (points / config.dayNightEveryPoints).toInt()
+        if (period == 0) return 0f
+        val pointsIntoPeriod = points - period * config.dayNightEveryPoints
+        val fade = (pointsIntoPeriod / config.dayNightFadePoints).coerceIn(0f, 1f)
+        // Odd periods are night (fading in), even periods are day (fading out).
+        return if (period % 2 == 1) fade else 1f - fade
+    }
+
     private fun stepPlaying(world: World, dt: Float, viewWidth: Float): GameState {
         val scrolled = speedAt(world.distance) * dt
 

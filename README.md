@@ -18,8 +18,8 @@ idiom differs from what a Swift or React developer would expect.
 - [x] Dino runs and jumps on scrolling ground (variable-height jump, two-frame run cycle)
 - [x] Obstacles at random sizes and intervals, collision, game over and restart
 - [x] Speed ramp
-- [ ] High score saved with DataStore
-- [ ] Day/night color flip
+- [x] High score saved with DataStore
+- [x] Day/night cycle every 500 points
 - [ ] Web build (Compose Multiplatform, Wasm)
 
 ## Build and run
@@ -68,8 +68,9 @@ tap / frame tick ──▶ GameViewModel ──▶ GameEngine.press / release / 
 | `game/.../GameState.kt` | `sealed interface GameState`: `Ready`, `Playing`, `GameOver`. |
 | `game/.../GameEngine.kt` | Pure functions from (state, input) to the next state. |
 | `app/.../GameViewModel.kt` | Holds the state across rotation; turns events into engine calls. |
+| `app/.../HighScoreStore.kt` | Saves the best score with DataStore. |
 | `app/.../GameScreen.kt` | Frame loop (`withFrameNanos`), touch input, score overlay. |
-| `app/.../GameRenderer.kt` | Canvas drawing: ground, pebbles, cacti, and the dino from text grids. |
+| `app/.../GameRenderer.kt` | Canvas drawing: day and night palettes, ground, cacti, and the dino from text grids. |
 
 ### A few choices worth calling out
 
@@ -91,13 +92,22 @@ tap / frame tick ──▶ GameViewModel ──▶ GameEngine.press / release / 
   parameter. Tests pass `Random(seed)` so every "random" run is repeatable.
 - **No accidental restarts.** Taps are ignored for half a second after a crash,
   so a late jump doesn't skip past your final score.
+- **Day and night without extra state.** How dark the sky is gets calculated
+  from the distance run, so a crash freezes the sky with everything else and
+  a new run starts in daylight. The renderer blends two palettes, so no color
+  is hard-coded for one mode.
+- **High score stays in the app layer.** The engine only reports the crash.
+  The ViewModel notices the switch to `GameOver` and saves the score, so
+  `:game` stays free of storage code. The save compares against the stored best
+  inside a DataStore transaction, so a lower score can never overwrite a higher
+  one.
 - **Cheap redraws.** The Canvas reads the game state inside its draw lambda,
   so each frame only re-runs drawing, not layout. The score overlay uses
   `derivedStateOf`, so it only rebuilds when the number on screen changes.
 
 ## Tests
 
-`game/src/commonTest` has 37 tests covering:
+`game/src/commonTest` has 42 tests covering:
 
 - **Jump physics:** peak height, no double jump, landing, variable jump
   height, frame-rate independence.
@@ -106,6 +116,8 @@ tap / frame tick ──▶ GameViewModel ──▶ GameEngine.press / release / 
   seeded runs repeat exactly, the shortest gap is always clearable.
 - **Engine rules:** state transitions, scrolling, spawning at the screen edge,
   speed ramp and cap, crashing, clearing an obstacle with a jump, restart delay.
+- **Day/night:** daylight at the start, the fade at each milestone, full
+  night, dawn, and the sky holding still after a crash.
 
 They use `kotlin.test`, Kotlin's own test library, so they'll also run on the
 web target later.

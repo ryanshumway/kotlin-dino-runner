@@ -57,6 +57,13 @@ data class GameConfig(
     // Scoring and timing
     /** Distance that earns one point. 360 / 36 is 10 points per second at the start. */
     val unitsPerPoint: Float = 36f,
+
+    // Day and night
+    /** The sky flips between day and night every this many points. */
+    val dayNightEveryPoints: Float = 500f,
+    /** How many points the fade between day and night lasts (about 2 seconds). */
+    val dayNightFadePoints: Float = 25f,
+
     /**
      * After a crash, taps are ignored this long, so a jump pressed a moment
      * too late doesn't instantly restart the game and hide the final score.
